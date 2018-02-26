@@ -312,3 +312,324 @@ int Bispectrum::loop_integrand(const int *ndim, const double xx[], const int *nc
 
    return 0;
 }
+
+//------------------------------------------------------------------------------
+//DANIELE
+//SOFT
+//Tree angular average
+
+int Bispectrum::tree_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata)
+{
+   // get the options
+   AngularIntegrationOptions* data = static_cast<AngularIntegrationOptions*>(userdata);
+   
+   // external momenta magnitudes
+   double k1 = data->k1;
+   double k2 = data->k2;
+   
+   // define the variables needed for the PS point
+   double costheta = 2 * xx[0] - 1.;
+   double jacobian = 2;
+   
+   // set the PS point and return the integrand
+   double integrand = data->bispectrum->tree(k1, k2, costheta);
+   
+   // loop calculation
+   ff[0] = jacobian * integrand;
+   
+   return 0;
+}
+
+//------------------------------------------------------------------------------
+IntegralResult Bispectrum::tree(double k1, double k2)
+{
+   // options passed into the integration
+   AngularIntegrationOptions data;
+   data.k1 = k1;
+   data.k2 = k2;
+   data.bispectrum = this;
+   
+   // Integration
+   // CUBA parameters
+   // PS dimensionality
+   // theta: 1-dim
+   const int ndim = 1;
+   // number of computations
+   const int ncomp = 1; // only 1 computation
+   // number of points sent to the integrand per invocation
+   const int nvec = 1; // no vectorization
+   // absolute uncertainty (safeguard)
+   const double epsrel = 1e-4;
+   const double epsabs = 0;
+   // min, max number of points
+   const int mineval = 0;
+   const int maxeval = 100000;
+   // starting number of points
+   const int nstart = 1000;
+   // increment per iteration
+   // number of additional pts sampled per iteration
+   const int nincrease = 1000;
+   // batch size to sample PS points in
+   const int nbatch = 1000;
+   // grid number
+   // 1-10 saves the grid for another integration
+   const int gridnum = 0;
+   // file for the state of the integration
+   const char *statefile = NULL;
+   // spin
+   void* spin = NULL;
+   // random number seed
+   const int vegasseed = _seed;
+   // flags:
+   // bits 0&1: verbosity level
+   // bit 2: whether or not to use only last sample (0 for all samps, 1 for last only)
+   // bit 3: whether or not to use sharp edges in importance function (0 for no, 1 for yes)
+   // bit 4: retain the state file (0 for no, 1 for yes)
+   // bits 8-31: random number generator, also uses seed parameter:
+   //    seed = 0: Sobol (quasi-random) used, ignores bits 8-31 of flags
+   //    seed > 0, bits 8-31 of flags = 0: Mersenne Twister
+   //    seed > 0, bits 8-31 of flags > 0: Ranlux
+   // current flag setting: 1038 = 10000001110
+   int flags = 1038;
+   // number of regions, evaluations, fail code
+   int neval, fail;
+   
+   // containers for output
+   double integral[ncomp], error[ncomp], prob[ncomp];
+   
+   // run VEGAS
+   Vegas(ndim, ncomp,tree_integrand, &data, nvec,
+         epsrel, epsabs, flags, vegasseed,
+         mineval, maxeval, nstart, nincrease, nbatch,
+         gridnum, statefile, spin,
+         &neval, &fail, integral, error, prob);
+   
+   // save the results in a container
+   IntegralResult result(integral[0], error[0], prob[0]);
+   
+   return result;
+}
+
+//------------------------------------------------------------------------------
+//ONE LOOP
+
+int Bispectrum::full_loop_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata)
+{
+   // get the options
+   LoopIntegrationOptions* data = static_cast<LoopIntegrationOptions*>(userdata);
+   
+   // external momentum magnitude
+   double p1 = data->k1;
+   double p2 = data->k2;
+   
+   // define the variables needed for the PS point
+   double qpts[3] = {xx[0], xx[1], xx[2]};
+   double costheta = 2 * xx[3] - 1.;
+   
+   // set the PS point and return the integrand
+   double jacobian_costh = 2;
+   double jacobian_loop = data->loopPS->setPS(qpts);
+   double integrand = 0;
+   if (jacobian_loop > 0) {
+      ThreeVector q = data->loopPS->q();
+      ThreeVector k1(0, 0, p1);
+      ThreeVector k2(p2 * sqrt(1 - costheta*costheta), 0, p2 * costheta);
+      integrand = data->bispectrum->loopSPT_excl(k1, k2, q);
+   }
+   
+   // loop calculation
+   ff[0] = jacobian_costh * jacobian_loop * integrand;
+   
+   return 0;
+}
+
+//------------------------------------------------------------------------------
+IntegralResult Bispectrum::loopSPT(double k1, double k2)
+{
+   // options passed into the integration
+   LoopIntegrationOptions data;
+   data.k1 = k1;
+   data.k2 = k2;
+   data.bispectrum = this;
+   double qmax = 10;
+   LoopPhaseSpace loopPS(qmax);
+   data.loopPS = &loopPS;
+   
+   // Integration
+   // CUBA parameters
+   // PS dimensionality
+   // q + costheta: 4-dim
+   const int ndim = 4;
+   // number of computations
+   const int ncomp = 1; // only 1 computation
+   // number of points sent to the integrand per invocation
+   const int nvec = 1; // no vectorization
+   // absolute uncertainty (safeguard)
+   const double epsrel = 1e-4;
+   const double epsabs = 0;
+   // min, max number of points
+   const int mineval = 0;
+   const int maxeval = 100000;
+   // starting number of points
+   const int nstart = 1000;
+   // increment per iteration
+   // number of additional pts sampled per iteration
+   const int nincrease = 1000;
+   // batch size to sample PS points in
+   const int nbatch = 1000;
+   // grid number
+   // 1-10 saves the grid for another integration
+   const int gridnum = 0;
+   // file for the state of the integration
+   const char *statefile = NULL;
+   // spin
+   void* spin = NULL;
+   // random number seed
+   const int vegasseed = _seed;
+   // flags:
+   // bits 0&1: verbosity level
+   // bit 2: whether or not to use only last sample (0 for all samps, 1 for last only)
+   // bit 3: whether or not to use sharp edges in importance function (0 for no, 1 for yes)
+   // bit 4: retain the state file (0 for no, 1 for yes)
+   // bits 8-31: random number generator, also uses seed parameter:
+   //    seed = 0: Sobol (quasi-random) used, ignores bits 8-31 of flags
+   //    seed > 0, bits 8-31 of flags = 0: Mersenne Twister
+   //    seed > 0, bits 8-31 of flags > 0: Ranlux
+   // current flag setting: 1038 = 10000001110
+   int flags = 1038;
+   // number of regions, evaluations, fail code
+   int neval, fail;
+   
+   // containers for output
+   double integral[ncomp], error[ncomp], prob[ncomp];
+   
+   // run VEGAS
+   Vegas(ndim, ncomp, full_loop_integrand, &data, nvec,
+         epsrel, epsabs, flags, vegasseed,
+         mineval, maxeval, nstart, nincrease, nbatch,
+         gridnum, statefile, spin,
+         &neval, &fail, integral, error, prob);
+   
+   // save the results in a container
+   IntegralResult result(integral[0], error[0], prob[0]);
+   
+   return result;
+}
+
+//------------------------------------------------------------------------------
+//SEPARATE DIAGRAMS
+//ONE LOOP
+
+double Bispectrum::loopSPT_excl(ThreeVector k1, ThreeVector k2, ThreeVector q, Graphs graph)
+{
+   // set the external momenta
+   DiagramMomenta momenta(unordered_map<Momenta::MomentumLabel, ThreeVector> {{Momenta::k1, k1}, {Momenta::k2, k2}, {Momenta::k3, -k1-k2}, {Momenta::q, q}});
+   
+   double value = _diagrams[graph]->value_IRreg(momenta);
+   return value;
+}
+
+int Bispectrum::full_loop_integrand_diagrams(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata)
+{
+   // get the options
+   LoopIntegrationOptions* data = static_cast<LoopIntegrationOptions*>(userdata);
+   
+   // external momentum magnitude
+   double p1 = data->k1;
+   double p2 = data->k2;
+   Graphs graph = data->thisGraph;
+   
+   // define the variables needed for the PS point
+   double qpts[3] = {xx[0], xx[1], xx[2]};
+   double costheta = 2 * xx[3] - 1.;
+   
+   // set the PS point and return the integrand
+   double jacobian_costh = 2;
+   double jacobian_loop = data->loopPS->setPS(qpts);
+   double integrand = 0;
+   if (jacobian_loop > 0) {
+      ThreeVector q = data->loopPS->q();
+      ThreeVector k1(0, 0, p1);
+      ThreeVector k2(p2 * sqrt(1 - costheta*costheta), 0, p2 * costheta);
+      integrand = data->bispectrum->loopSPT_excl(k1, k2, q, graph);
+   }
+   
+   // loop calculation
+   ff[0] = jacobian_costh * jacobian_loop * integrand;
+   
+   return 0;
+}
+
+//------------------------------------------------------------------------------
+IntegralResult Bispectrum::loopSPT(double k1, double k2, Graphs graph)
+{
+   // options passed into the integration
+   LoopIntegrationOptions data;
+   data.k1 = k1;
+   data.k2 = k2;
+   data.bispectrum = this;
+   data.thisGraph = graph;
+   double qmax = 10;
+   LoopPhaseSpace loopPS(qmax);
+   data.loopPS = &loopPS;
+   
+   // Integration
+   // CUBA parameters
+   // PS dimensionality
+   // q + costheta: 4-dim
+   const int ndim = 4;
+   // number of computations
+   const int ncomp = 1; // only 1 computation
+   // number of points sent to the integrand per invocation
+   const int nvec = 1; // no vectorization
+   // absolute uncertainty (safeguard)
+   const double epsrel = 1e-4;
+   const double epsabs = 0;
+   // min, max number of points
+   const int mineval = 0;
+   const int maxeval = 100000;
+   // starting number of points
+   const int nstart = 1000;
+   // increment per iteration
+   // number of additional pts sampled per iteration
+   const int nincrease = 1000;
+   // batch size to sample PS points in
+   const int nbatch = 1000;
+   // grid number
+   // 1-10 saves the grid for another integration
+   const int gridnum = 0;
+   // file for the state of the integration
+   const char *statefile = NULL;
+   // spin
+   void* spin = NULL;
+   // random number seed
+   const int vegasseed = _seed;
+   // flags:
+   // bits 0&1: verbosity level
+   // bit 2: whether or not to use only last sample (0 for all samps, 1 for last only)
+   // bit 3: whether or not to use sharp edges in importance function (0 for no, 1 for yes)
+   // bit 4: retain the state file (0 for no, 1 for yes)
+   // bits 8-31: random number generator, also uses seed parameter:
+   //    seed = 0: Sobol (quasi-random) used, ignores bits 8-31 of flags
+   //    seed > 0, bits 8-31 of flags = 0: Mersenne Twister
+   //    seed > 0, bits 8-31 of flags > 0: Ranlux
+   // current flag setting: 1038 = 10000001110
+   int flags = 1038;
+   // number of regions, evaluations, fail code
+   int neval, fail;
+   
+   // containers for output
+   double integral[ncomp], error[ncomp], prob[ncomp];
+   
+   // run VEGAS
+   Vegas(ndim, ncomp, full_loop_integrand_diagrams, &data, nvec,
+         epsrel, epsabs, flags, vegasseed,
+         mineval, maxeval, nstart, nincrease, nbatch,
+         gridnum, statefile, spin,
+         &neval, &fail, integral, error, prob);
+   
+   // save the results in a container
+   IntegralResult result(integral[0], error[0], prob[0]);
+   
+   return result;
+}

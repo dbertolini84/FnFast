@@ -80,7 +80,7 @@ class Bispectrum
       double _kBin;                                   ///< size of k bins
       WindowFunctionBase* _W;                         ///< Window function
       int _seed;                                      ///< random number seed for VEGAS
-
+   
       /// phase space for the loop momentum
       class LoopPhaseSpace {
          private:
@@ -111,6 +111,7 @@ class Bispectrum
          double costheta12;
          Bispectrum* bispectrum;
          LoopPhaseSpace* loopPS;
+         Graphs thisGraph;
       };
 
    public:
@@ -158,10 +159,30 @@ class Bispectrum
       double loopSPT_kbin_win(double k1, double k2);
       /// one loop counterterms
       double ctermsEFT_kbin_win(double k1, double k2);
+   
+      ///DANIELE
+      ///SOFT
+      IntegralResult tree(double k1, double k2);
+      IntegralResult loopSPT(double k1, double k2);
+   
+      double loopSPT_excl(ThreeVector k1, ThreeVector k2, ThreeVector q, Graphs graph);
+      IntegralResult loopSPT(double k1, double k2, Graphs graph);
 
+   
+      /// container for the integration options
+      struct AngularIntegrationOptions {
+         double k1;
+         double k2;
+         Bispectrum* bispectrum;
+      };
+
+   
    private:
       /// loop integrand function
       static int loop_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int tree_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int full_loop_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int full_loop_integrand_diagrams(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
 };
 
 ////////////////////////////////////////////////////////////////////////////////

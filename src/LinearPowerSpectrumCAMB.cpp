@@ -21,7 +21,7 @@
 using namespace std;
 
 //------------------------------------------------------------------------------
-LinearPowerSpectrumCAMB::LinearPowerSpectrumCAMB(const string& input_file): _input_file(input_file), _accel_ptr(NULL), _spline_ptr(NULL)
+LinearPowerSpectrumCAMB::LinearPowerSpectrumCAMB(const string& input_file): _input_file(input_file), _accel_ptr(NULL), _spline_ptr(NULL), _kmin(0.)
 {
     ifstream file;
     file.open(_input_file);
@@ -111,9 +111,13 @@ LinearPowerSpectrumCAMB::LinearPowerSpectrumCAMB(const string& input_file): _inp
 double LinearPowerSpectrumCAMB::operator()(double x)
 {
    double res = 0;
+   
+   double k0 = _kmin;
+   if(_kvec_patches.front() > _kmin) k0 = _kvec_patches.front();
 
-   if( x >= 0 && x < _kvec_patches.front()) res = exp(_c0_low) * pow(x,_c1_low);  // Patch at low k
-   if( x >= _kvec_patches.front() && x < _kvec_patches.back()) res = gsl_spline_eval(_spline_ptr, x, _accel_ptr); // Interpolated function
+   // if k<_kmin, P=0;
+   if( x > _kmin && x < k0) res = exp(_c0_low) * pow(x,_c1_low);  // Patch at low k
+   if( x > k0 && x < _kvec_patches.back()) res = gsl_spline_eval(_spline_ptr, x, _accel_ptr); // Interpolated function
    if( x >= _kvec_patches.back()) res = exp(_c0_high) * pow(x,_c1_high); // Patch at high k
 
    return res;

@@ -111,6 +111,30 @@ class Trispectrum
             /// returns the loop momentum
             ThreeVector q() { return _q; }
       };
+   
+      /// phase space for the Angular Integration
+      class AngularPhaseSpace {
+         private:
+      
+            double _jacobian;       ///< jacobian for the phase space point
+            ThreeVector _qHat;      ///< loop momentum value
+      
+         public:
+            static constexpr double pi = 3.14159265358979;      ///< pi
+      
+         public:
+            /// constructor
+            AngularPhaseSpace() {}
+            /// destructor
+            virtual ~AngularPhaseSpace() {}
+      
+            /// set the loop phase space, returns the jacobian
+            double set_angularPS(double qpts[2]);
+      
+            /// returns the loop momentum
+            ThreeVector qHat() { return _qHat; }
+      };
+
 
       /// container for the integration options
       struct LoopIntegrationOptions {
@@ -128,6 +152,36 @@ class Trispectrum
          Trispectrum* trispectrum;
       };
 
+      /// container for the integration options
+      struct GeneralAngularIntegrationOptions {
+         double k;
+         double kp;
+         double kpp;
+         Trispectrum* trispectrum;
+         AngularPhaseSpace* angularPS;
+      };
+   
+      /// container for the integration options
+      struct AngularLoopIntegrationOptions {
+         double k;
+         double kp;
+         double kpp;
+         Trispectrum* trispectrum;
+         AngularPhaseSpace* angularPS;
+         LoopPhaseSpace* loopPS;
+      };
+   
+   /// container for the integration options
+   struct TriLoopIntegrationOptions {
+      ThreeVector k1;
+      ThreeVector k2;
+      ThreeVector k3;
+      Trispectrum* trispectrum;
+      LoopPhaseSpace* loopPS;
+   };
+
+   
+   
    public:
       /// constructor
       Trispectrum(Order order, LinearPowerSpectrumBase* PL, EFTcoefficients* eftcoefficients);
@@ -185,10 +239,31 @@ class Trispectrum
       /// tree level
       double tree(ThreeVector k1, ThreeVector k2, ThreeVector k3);
       /// one loop differential in q and integrated in q
-      double loopSPT_excl(ThreeVector& k1, ThreeVector& k2, ThreeVector& k3, ThreeVector& q);
-      double loopSPT(ThreeVector k1, ThreeVector k2, ThreeVector k3);
+      double loopSPT_excl(ThreeVector k1, ThreeVector k2, ThreeVector k3, ThreeVector q);
+      IntegralResult loopSPT(ThreeVector k1, ThreeVector k2, ThreeVector k3);
       /// one loop counterterms
       double ctermsEFT(ThreeVector k1, ThreeVector k2, ThreeVector k3);
+   
+      // DANIELE
+      // select a single loop diagram
+      // right now only for testing purpose
+      void set_loop_diagram(Trispectrum::Graphs graph_label);
+   
+   
+      // ANGULAR AVERAGED TRIANGLE
+      // <T(k, kp, -k-kp, 0)>
+      IntegralResult tri_triangle_tree(double k, double kp);
+      IntegralResult tri_triangle_loopSPT(double k, double kp);
+   
+      // ANGULAR AVERAGED TRAPEZOID
+      IntegralResult tri_trapezoid_tree(double k, double kp, double kpp);
+      IntegralResult tri_trapezoid_loop(double k, double kp, double kpp);
+   
+      // EQUILATERAL TRIANGLE
+      IntegralResult tri_equi_tree(double k, double kp);
+      IntegralResult tri_equi_loop(double k, double kp);
+
+   
 
    private:
       /// tree level: polar angle integrand function, covariance limit
@@ -199,6 +274,23 @@ class Trispectrum
       static int angular_loop_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
       /// polar angle integrand function, covariance limit, EFT counterterms
       static int cterms_angular_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+   
+      static int triangle_tree_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int triangle_loop_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+   
+      static int general_angular_integrand_tree(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int general_angular_integrand_loop(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+   
+      static int equilateral_integrand_tree(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+      static int equilateral_integrand_loop(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+
+      static int loopSPT_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata);
+
+
+   
+   
+      double _tri_triangle_tree(double k, double kp, double costheta);
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////

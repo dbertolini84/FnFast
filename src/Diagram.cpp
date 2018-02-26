@@ -65,7 +65,7 @@ Diagram::Diagram(vector<Line> lines, unordered_map<Vertices::VertexLabel, Kernel
 }
 
 //------------------------------------------------------------------------------
-double Diagram::value_base(DiagramMomenta& mom)
+double Diagram::value_base(DiagramMomenta mom)
 {
    // check to see if the loop momentum is above the cutoff, if so return 0
    // first check whether the diagram has a loop or not
@@ -100,7 +100,7 @@ double Diagram::value_base(DiagramMomenta& mom)
 }
 
 //------------------------------------------------------------------------------
-double Diagram::value_base_IRreg(DiagramMomenta& mom)
+double Diagram::value_base_IRreg(DiagramMomenta mom)
 {
    // no IR regulation necessary if there are no poles away from q = 0
    if (_IRpoles.empty()) return value_base(mom);
@@ -151,7 +151,7 @@ double Diagram::value_base_IRreg(DiagramMomenta& mom)
 }
 
 //------------------------------------------------------------------------------
-double Diagram::value_IRreg(DiagramMomenta& mom)
+double Diagram::value_IRreg(DiagramMomenta mom)
 {
    /* 
     * To return the IR regulated diagram symmetrized over external momenta,
@@ -248,7 +248,7 @@ vector<unordered_map<Momenta::MomentumLabel, Momenta::MomentumLabel> > Diagram::
    // Since we will be applying the same permutation to momentum labels and vertex labels,
    // we index permutations with a simple list of integers
    vector<int> indices;
-   for (int i = 0; i < _vertices.size(); i++) { indices.push_back(i); }
+   for (size_t i = 0; i < _vertices.size(); i++) { indices.push_back(i); }
    // make sure it's sorted...
    sort(indices.begin(), indices.end());
    do {
@@ -266,6 +266,10 @@ vector<unordered_map<Momenta::MomentumLabel, Momenta::MomentumLabel> > Diagram::
       }
       // now sort this object and compare it to existing ones
       sort(vertexpairs.begin(), vertexpairs.end());
+//      cout << "-----permutation-----" << endl;
+//      for (size_t i = 0; i < vertexpairs.size(); i++) {
+//         cout << "vertex pair: " << vertexpairs[i].vA << " , " << vertexpairs[i].vB << endl;
+//      }
       bool newitem = true;
       for (size_t i = 0; i < vertexconnections.size(); i++) {
          if (vertexpairs == vertexconnections[i]) { newitem = false; break; }

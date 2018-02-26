@@ -2,7 +2,7 @@
 /// \file Trispectrum.cpp
 //
 // Author(s):
-//    Jon Walsh
+//    Jon Walsh & Daniele Bertolini
 //
 // Copyright:
 //    Copyright (C) 2015  LBL
@@ -421,7 +421,7 @@ int Trispectrum::tree_angular_integrand(const int *ndim, const double xx[], cons
 //******************************************************************************
 
 //------------------------------------------------------------------------------
-double Trispectrum::loopSPT_excl(ThreeVector& k1, ThreeVector& k2, ThreeVector& k3, ThreeVector& q)
+double Trispectrum::loopSPT_excl(ThreeVector k1, ThreeVector k2, ThreeVector k3, ThreeVector q)
 {
    // set the external momenta
    DiagramMomenta momenta(unordered_map<Momenta::MomentumLabel, ThreeVector> {{Momenta::k1, k1}, {Momenta::k2, k2}, {Momenta::k3, k3},  {Momenta::k4, -k1-k2-k3}, {Momenta::q, q}});
@@ -475,7 +475,7 @@ IntegralResult Trispectrum::cov_loopSPT(double k, double kp, double costheta)
    const double epsabs = 0;
    // min, max number of points
    const int mineval = 0;
-   const int maxeval = 25000;
+   const int maxeval = 250000;
    // starting number of points
    const int nstart = 1000;
    // increment per iteration
@@ -528,6 +528,7 @@ double Trispectrum::LoopPhaseSpace::set_loopPS(double qpts[3], double x12)
    // ----- COMMENT/UNCOMMENT TO SWITCH TO NON-ORTHOGONAL COORDINATES FOR PHASE SPACE SAMPLING -----
    // we sample q in non-orthogonal coordinates centered on the two principal directions
    // sample the coordinates
+   /*
    double qmag = qpts[0] * _qmax;
    double s = qpts[1];
    double alpha = 2*pi * qpts[2];
@@ -535,18 +536,21 @@ double Trispectrum::LoopPhaseSpace::set_loopPS(double qpts[3], double x12)
    double theta12 = acos(x12);
    double qcosth = sqrt(abs(1 - s*s)) * cos(0.5*theta12 - alpha);
    double qphi = acos((1. / sqrt(abs(1 - qcosth*qcosth))) * sqrt(abs(1 - s*s)) * sin(0.5*theta12 - alpha));
+    */
    // ----- END OF BLOCK FOR NON-ORTHOGONAL COORDINATES -----
 
+    
 
    // ----- COMMENT/UNCOMMENT TO SWITCH TO SPHERICAL COORDINATES FOR PHASE SPACE SAMPLING -----
-   /*
+   
    // we sample q flat in spherical coordinates, setting k along the z-axis, kp in the x-z plane
    // q components
    double qmag = qpts[0] * _qmax;
    double qcosth = 2 * qpts[1] - 1.;
    double qphi = 2*pi * qpts[2];
-   */
+
    // ----- END OF BLOCK FOR SPHERICAL COORDINATES -----
+
 
    // jacobian
    // qmax from the magnitude integral,
@@ -806,4 +810,122 @@ int Trispectrum::cterms_angular_integrand(const int *ndim, const double xx[], co
    ff[0] = jacobian * integrand;
    
    return 0;
+}
+
+//------------------------------------------------------------------------------
+// DANIELE
+// ONE LOOP
+
+int Trispectrum::loopSPT_integrand(const int *ndim, const double xx[], const int *ncomp, double ff[], void *userdata)
+{
+   // get the options
+   TriLoopIntegrationOptions* data = static_cast<TriLoopIntegrationOptions*>(userdata);
+   
+   // external momentum magnitude
+   ThreeVector k1 = data->k1;
+   ThreeVector k2 = data->k2;
+   ThreeVector k3 = data->k3;
+   
+   // define the variables needed for the PS point
+   double qpts[3] = {xx[0], xx[1], xx[2]};
+   
+   // set the PS point and return the integrand
+   double jacobian_loop = data->loopPS->set_loopPS(qpts, 1);
+   double integrand = 0;
+   if (jacobian_loop > 0) {
+      ThreeVector q = data->loopPS->q();
+      integrand = data->trispectrum->loopSPT_excl(k1, k2, k3, q);
+   }
+   
+   // loop calculation
+   ff[0] = jacobian_loop * integrand;
+   
+   return 0;
+}
+
+//------------------------------------------------------------------------------
+IntegralResult Trispectrum::loopSPT(ThreeVector k1, ThreeVector k2, ThreeVector k3){
+   
+   // options passed into the integration
+   TriLoopIntegrationOptions data;
+   data.k1 = k1;
+   data.k2 = k2;
+   data.k3 = k3;
+
+   data.trispectrum = this;
+   double qmax = 10;
+   LoopPhaseSpace loopPS(qmax);
+   data.loopPS = &loopPS;
+   
+   // Integration
+   // CUBA parameters
+   // PS dimensionality
+   // q + costheta: 4-dim
+   const int ndim = 3;
+   // number of computations
+   const int ncomp = 1; // only 1 computation
+   // number of points sent to the integrand per invocation
+   const int nvec = 1; // no vectorization
+   // absolute uncertainty (safeguard)
+   const double epsrel = 1e-3;
+   const double epsabs = 0;
+   // min, max number of points
+   const int mineval = 0;
+   const int maxeval = 100000;
+   // starting number of points
+   const int nstart = 1000;
+   // increment per iteration
+   // number of additional pts sampled per iteration
+   const int nincrease = 1000;
+   // batch size to sample PS points in
+   const int nbatch = 1000;
+   // grid number
+   // 1-10 saves the grid for another integration
+   const int gridnum = 0;
+   // file for the state of the integration
+   const char *statefile = NULL;
+   // spin
+   void* spin = NULL;
+   // random number seed
+   const int vegasseed = _seed;
+   // flags:
+   // bits 0&1: verbosity level
+   // bit 2: whether or not to use only last sample (0 for all samps, 1 for last only)
+   // bit 3: whether or not to use sharp edges in importance function (0 for no, 1 for yes)
+   // bit 4: retain the state file (0 for no, 1 for yes)
+   // bits 8-31: random number generator, also uses seed parameter:
+   //    seed = 0: Sobol (quasi-random) used, ignores bits 8-31 of flags
+   //    seed > 0, bits 8-31 of flags = 0: Mersenne Twister
+   //    seed > 0, bits 8-31 of flags > 0: Ranlux
+   // current flag setting: 1038 = 10000001110
+   int flags = 1038;
+   // number of regions, evaluations, fail code
+   int neval, fail;
+   
+   // containers for output
+   double integral[ncomp], error[ncomp], prob[ncomp];
+   
+   // run VEGAS
+   Vegas(ndim, ncomp, loopSPT_integrand, &data, nvec,
+         epsrel, epsabs, flags, vegasseed,
+         mineval, maxeval, nstart, nincrease, nbatch,
+         gridnum, statefile, spin,
+         &neval, &fail, integral, error, prob);
+   
+   // save the results in a container
+   IntegralResult result(integral[0], error[0], prob[0]);
+   
+   return result;
+}
+
+
+//------------------------------------------------------------------------------
+// DANIELE
+// TEMPORARY FUNCTION  - HERE FOR TEST PURPOSES
+
+void Trispectrum::set_loop_diagram(Trispectrum::Graphs graph_label){
+   
+   _loop.clear();
+   _loop.push_back(_diagrams[graph_label]);
+   
 }
